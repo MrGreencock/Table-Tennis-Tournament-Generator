@@ -1,4 +1,5 @@
 let startedMatches = [];
+let headToHeadData = [];
 
 function startMatch(match_id) {
     const matchElement = document.querySelector(`.match-item[data-match-id="${match_id}"]`);
@@ -31,6 +32,21 @@ function startMatch(match_id) {
         console.error('Nem található az input mező a match-item-ben.');
     }
 }
+
+function loadHeadToHeadData(tournamentId) {
+    return fetch(`get_head_to_head.php?tournament_id=${tournamentId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                headToHeadData = data.data;
+                console.log("Head-to-head data loaded:", headToHeadData); // Ellenőrzéshez
+            } else {
+                console.error("Failed to load head-to-head data:", data.message);
+            }
+        })
+        .catch(error => console.error("Error fetching head-to-head data:", error));
+}
+
 
 function prioritizeFreeMatches() {
     const matchItems = document.querySelectorAll('.match-item');
@@ -125,7 +141,11 @@ function submitResult(match_id) {
     .then(data => {
         if (data.status === 'success') {
             console.log('Eredmény sikeresen frissítve.');
-            loadMatchesAndScores(tournament_id);  // Meccsek újratöltése
+
+            // Head-to-head adatok újratöltése a legfrissebb eredményekhez
+            loadHeadToHeadData(tournament_id).then(() => {
+                loadMatchesAndScores(tournament_id);  // Meccsek és eredmények újratöltése
+            });
         } else {
             console.error('Hiba történt az eredmény frissítésekor:', data.message);
             alert('Hiba történt: ' + data.message);
@@ -133,6 +153,8 @@ function submitResult(match_id) {
     })
     .catch(error => console.error('Fetch hiba:', error));
 }
+
+
 
 
 function displayMatches(matches) {
@@ -207,86 +229,96 @@ function displayMatches(matches) {
 }
 
 function displayScores(scores) {
+    console.log("displayScores függvény fut, adatok:", scores);
     const scoreTableBody = document.getElementById('scoreTableBody');
     const scoreSection = document.getElementById('scoreSection');
-    
+
+    if (!scoreTableBody) {
+        console.error("A scoreTableBody elem nem található.");
+        return;
+    }
+
     scoreTableBody.innerHTML = '';  
 
     if (scores.length > 0) {
-        scoreSection.style.display = 'block';  
+        scoreSection.style.display = 'block';
+        scores.forEach(score => console.log(score.id)); 
+        // Rendezzük a scores tömböt a pontok, az egymás elleni eredmények, majd a szettkülönbség alapján
+        scores.sort((a, b) => {
+            const aPoints = parseInt(a.points) || 0;
+            const bPoints = parseInt(b.points) || 0;
+
+            if (aPoints !== bPoints) return bPoints - aPoints;
+
+            // Egymás elleni eredmények összehasonlítása az ID-k alapján
+            const headToHeadResult = getHeadToHeadResult(a.id, b.id);
+            if (headToHeadResult !== 0) return headToHeadResult;
+
+            // Szettkülönbség összehasonlítása, ha az előzők alapján egyenlő
+            const aSetDiff = parseInt(a.setDifference) || 0;
+            const bSetDiff = parseInt(b.setDifference) || 0;
+            return bSetDiff - aSetDiff;
+        });
+
+        // A rendezett scores tömb feltöltése a táblába
         scores.forEach(score => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${score.name}</td>
                 <td>${score.wins || 0}</td>
                 <td>${score.losses || 0}</td>
-                <td>${score.setsWon || 0}</td> <!-- Egyeztessük a mezőneveket -->
+                <td>${score.setsWon || 0}</td>
                 <td>${score.setsLost || 0}</td>
                 <td>${score.setDifference || 0}</td>
                 <td>${score.points || 0}</td>
             `;
             scoreTableBody.appendChild(row);
         });
-        
-        const table = document.getElementById('scoreTable');
-        const tbody = table.querySelector('tbody');
-
-        const rows = Array.from(tbody.querySelectorAll('tr'));
-
-        rows.sort((a, b) => {
-            // Elsődleges: Pontszámok alapján rendezés
-            const aPoints = parseInt(a.children[6].textContent) || 0;
-            const bPoints = parseInt(b.children[6].textContent) || 0;
-            if (aPoints !== bPoints) return bPoints - aPoints;
-
-            // Másodlagos: Egymás elleni eredmény alapján rendezés, ha pontszám megegyezik
-            const aName = a.children[0].textContent;
-            const bName = b.children[0].textContent;
-            const headToHeadResult = getHeadToHeadResult(aName, bName, scores);
-
-            if (headToHeadResult !== 0) return headToHeadResult;
-
-            // Harmadik: Szettkülönbség alapján rendezés
-            const aSetDiff = parseInt(a.children[5].textContent) || 0;
-            const bSetDiff = parseInt(b.children[5].textContent) || 0;
-            return bSetDiff - aSetDiff;
-        });
-
-        tbody.innerHTML = '';  // Törli az aktuális sorokat
-        rows.forEach(row => tbody.appendChild(row));  // Újrarendezi a sorokat és hozzáadja őket
-
     } else {
         scoreSection.style.display = 'none';  
     }
 }
 
-// Kiegészítő függvény az egymás elleni eredmény ellenőrzésére
-function getHeadToHeadResult(playerA, playerB, scores) {
-    const playerARecord = scores.find(score => score.name === playerA);
-    const playerBRecord = scores.find(score => score.name === playerB);
 
-    if (!playerARecord || !playerBRecord) return 0;
 
-    // Feltételezzük, hogy van egy headToHead objektum a rekordban, amely tartalmazza az egymás elleni eredményt
-    if (playerARecord.headToHead && playerARecord.headToHead[playerB] > 0) return -1;  // A nyert
-    if (playerBRecord.headToHead && playerBRecord.headToHead[playerA] > 0) return 1;   // B nyert
+// Az egymás elleni eredmény ellenőrzése az azonosítók alapján
+function getHeadToHeadResult(playerAId, playerBId) {
+    const match = headToHeadData.find(
+        m => (m.player1_id == playerAId && m.player2_id == playerBId) ||
+             (m.player1_id == playerBId && m.player2_id == playerAId)
+    );
 
-    return 0; // Nincs megkülönböztetés, megegyeznek
+    console.log(`Egymás elleni eredmény keresése: ${playerAId} vs ${playerBId}`, match);
+
+    if (match) {
+        const playerAWins = (match.player1_id == playerAId) ? match.player1_wins : match.player2_wins;
+        const playerBWins = (match.player1_id == playerBId) ? match.player1_wins : match.player2_wins;
+
+        console.log(`Egymás elleni eredmény: ${playerAId} nyert: ${playerAWins}, ${playerBId} nyert: ${playerBWins}`);
+
+        if (playerAWins > playerBWins) return -1;
+        else if (playerBWins > playerAWins) return 1;
+    }
+    return 0;
 }
 
 
 function loadMatchesAndScores(tournament_id) {
-    fetch(`get_matches_and_scores.php?tournament_id=${tournament_id}`)
-    .then(response => response.json())
-    .then(data => {
-        console.log('Meccsek és tabella adatok:', data);
+    fetch(`https://dvdantikvar.hu/table_tennis/get_matches_and_scores.php?tournament_id=${tournament_id}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log("Kapott adatok:", data);  // Ellenőrizd, hogy mi jön vissza a szervertől
 
-        displayMatches(data.matches);
-
-        displayScores(data.scores);  
-    })
-    .catch(error => console.error('Hiba a meccsek és tabella betöltése közben:', error));
+            if (!data.matches || !data.scores) {
+                console.error("Hiba: Az adatok hiányosak vagy rosszul vannak megadva");
+            } else {
+                displayMatches(data.matches);
+                displayScores(data.scores);  
+            }
+        })
+        .catch(error => console.error('Hiba a meccsek és tabella betöltése közben:', error));
 }
+
 
 
 let tournament_id = null; 
@@ -323,13 +355,15 @@ document.getElementById('tournamentSetup').addEventListener('submit', function(e
     })
     .then(response => response.json())
     .then(data => {
-        if (data.status === 'success') {
-            tournament_id = data.tournament_id;  // tournament_id elmentése
-            loadMatchesAndScores(tournament_id);  // Meccsek és eredmények betöltése
-        } else {
-            console.error('Hiba a torna létrehozásakor:', data.message);
-            alert('Hiba történt a bajnokság létrehozásakor: ' + data.message);
-        }
+      if (data.status === 'success') {
+          tournament_id = data.tournament_id;
+          loadHeadToHeadData(tournament_id).then(() => {
+              loadMatchesAndScores(tournament_id);
+          });
+      } else {
+          console.error('Hiba a torna létrehozásakor:', data.message);
+          alert('Hiba történt a bajnokság létrehozásakor: ' + data.message);
+      }
     })
     .catch(error => console.error('Hiba:', error));
 });
