@@ -1,5 +1,5 @@
 # Asztalitenisz bajnokság generátor
-## Magyarul
+## 🇭🇺 Magyarul
 A NECC Asztalienisz Egyesületnek készítettem egy asztalitenisz bajnokság generáló rendszert, amiben létre lehet hozni egy bajnokságot, illetve meccseket generál és egy táblázatot készít. Kétféle szabály van:
 <ol>
   <li>nyert szettek alapján</li>
