@@ -41,14 +41,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        $set_mode = $tournament['set_mode'];  // 0: nyert szettek, 1: lejátszott szettek
-        $required_sets = $tournament['sets_to_win']; // Előírt szettmennyiség
+        $set_mode = $tournament['set_mode'];
+        $required_sets = $tournament['sets_to_win'];
 
         $is_valid = false;
 
         // Nyert szettek alapján történő validálás (set_mode = 0)
         if ($set_mode == 0) {
-            // Ellenőrizzük, hogy az egyik játékos elérte a nyert szettek számát és a másik játékos szettjeinek száma kisebb, mint a nyert szett szám
             if (($player1_score == $required_sets && $player2_score < $required_sets) || 
                 ($player2_score == $required_sets && $player1_score < $required_sets)) {
                 $is_valid = true;
@@ -57,7 +56,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Lejátszott szettek alapján történő validálás (set_mode = 1)
         if ($set_mode == 1) {
-            // Ellenőrizzük, hogy a két játékos összesen pontosan annyi szettet játszott le, amennyi elő van írva
             if ($player1_score + $player2_score == $required_sets) {
                 $is_valid = true;
             }
@@ -69,11 +67,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Meccs eredményének és státuszának frissítése (státusz: befejezett = 2)
-        $stmt = $pdo->prepare('UPDATE matches SET player1_score = ?, player2_score = ?, status = 2 WHERE id = ?');
-        $success = $stmt->execute([$player1_score, $player2_score, $match_id]);
+        $winner = null;
+        if ($set_mode == 0) {
+            if ($player1_score == $required_sets && $player2_score < $required_sets) {
+                $winner = 'player1';
+            } elseif ($player2_score == $required_sets && $player1_score < $required_sets) {
+                $winner = 'player2';
+            }
+        } elseif ($set_mode == 1 && ($player1_score + $player2_score == $required_sets)) {
+            $winner = ($player1_score > $player2_score) ? 'player1' : 'player2';
+        }
+
+        $stmt = $pdo->prepare('UPDATE matches SET player1_score = ?, player2_score = ?, winner = ?, status = 2 WHERE id = ?');
+        $success = $stmt->execute([$player1_score, $player2_score, $winner, $match_id]);
 
         if ($success) {
-            // Visszaadjuk a bajnokság azonosítóját a további meccsek frissítéséhez
             $stmt = $pdo->prepare('SELECT tournament_id FROM matches WHERE id = ?');
             $stmt->execute([$match_id]);
             $tournament = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -89,7 +97,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // Hibás kérés
     echo json_encode(['status' => 'error', 'message' => 'Hibás kérés']);
 } else {
     echo json_encode(['status' => 'error', 'message' => 'Érvénytelen kérés']);
