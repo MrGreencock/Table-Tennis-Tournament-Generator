@@ -14,4 +14,5 @@ I created a table tennis tournament generator for NECC Table Tennis Association 
   <li>First to n sets</li>
   <li>Best of n sets</li>
 </ol>
+
 The players list is fixed, in case of insertion I will create the player in MySQL database. In the future there will have some modification that I will assign a photo to each players. 
