@@ -9,7 +9,7 @@ A NECC Asztalienisz Egyesületnek készítettem egy asztalitenisz bajnokság gen
 A játékos lista adott, hozzáadás esetén csakis én hozom létre MySQL-ben. A jövőben annyi módosítás lesz, hogy minden játékoshoz egy fényképet fogok hozzárendelni.
 
 ## 🇬🇧 In English
-I created a table tennis tournament generator for NECC Table Tennis Association where you can create a tournament and after that the program generates matches and makes a tabelle. There are 2 types of scores:
+I created a table tennis tournament generator for NECC Table Tennis Association where you can create a tournament and after that the program generates matches and makes a tabelle. There are 2 types of winning rules:
 <ol>
   <li>First to n sets</li>
   <li>Best of n sets</li>
